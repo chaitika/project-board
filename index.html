@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Silent Pay · Board</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-brand">
+      <span class="brand-mark">₿</span>
+      <h1>Silent Pay Board</h1>
+    </div>
+    <div class="header-repos">
+      <span class="repo-badge repo-wallet">silent-pay-wallet</span>
+      <span class="repo-badge repo-sp">silent-pay</span>
+      <span class="repo-badge repo-indexer">shroud-indexer</span>
+    </div>
+    <div class="header-actions">
+      <span class="save-status" id="save-status"></span>
+      <button class="btn btn-sync" id="sync-btn" title="Fetch latest issues &amp; PRs from GitHub">↻ Sync</button>
+      <span class="sync-status" id="sync-status"></span>
+      <button class="icon-btn" id="settings-btn" title="Settings">⚙</button>
+    </div>
+  </header>
+
+  <nav class="track-nav">
+    <button class="track-tab active" data-tab="inbox">
+      Inbox
+      <span class="tab-badge" id="badge-inbox"></span>
+    </button>
+    <button class="track-tab" data-tab="ui-revamp">
+      UI Revamp
+      <span class="tab-badge" id="badge-ui-revamp"></span>
+    </button>
+    <button class="track-tab" data-tab="features">
+      Features
+      <span class="tab-badge" id="badge-features"></span>
+    </button>
+  </nav>
+
+  <main class="boards">
+    <!-- Inbox: unassigned GitHub items -->
+    <section class="board show" id="board-inbox">
+      <div class="col" id="col-inbox-issues">
+        <div class="col-header col-header-issues">
+          <span class="col-title">Issues</span>
+          <span class="col-count"></span>
+        </div>
+        <div class="col-body"></div>
+        <p class="col-empty">No unassigned issues. Click <strong>↻ Sync</strong> to fetch from GitHub.</p>
+      </div>
+      <div class="col" id="col-inbox-prs">
+        <div class="col-header col-header-prs">
+          <span class="col-title">Pull Requests</span>
+          <span class="col-count"></span>
+        </div>
+        <div class="col-body"></div>
+        <p class="col-empty">No unassigned pull requests.</p>
+      </div>
+    </section>
+
+    <!-- UI Revamp track -->
+    <section class="board" id="board-ui-revamp">
+      <div class="col" id="col-ui-revamp-ideas">
+        <div class="col-header col-header-ideas">
+          <span class="col-title">Ideas</span>
+          <span class="col-count"></span>
+        </div>
+        <button class="new-idea-btn" data-track="ui-revamp">+ New idea</button>
+        <div class="col-body"></div>
+        <p class="col-empty">No ideas yet.</p>
+      </div>
+      <div class="col" id="col-ui-revamp-issues">
+        <div class="col-header col-header-issues">
+          <span class="col-title">Issues</span>
+          <span class="col-count"></span>
+        </div>
+        <div class="col-body"></div>
+        <p class="col-empty">Assign issues from Inbox.</p>
+      </div>
+      <div class="col" id="col-ui-revamp-prs">
+        <div class="col-header col-header-prs">
+          <span class="col-title">Pull Requests</span>
+          <span class="col-count"></span>
+        </div>
+        <div class="col-body"></div>
+        <p class="col-empty">Assign PRs from Inbox.</p>
+      </div>
+      <div class="col col-done" id="col-ui-revamp-done">
+        <div class="col-header col-header-done">
+          <span class="col-title">Done</span>
+          <span class="col-count"></span>
+        </div>
+        <div class="col-body"></div>
+        <p class="col-empty">Completed items appear here.</p>
+      </div>
+    </section>
+
+    <!-- Features track -->
+    <section class="board" id="board-features">
+      <div class="col" id="col-features-ideas">
+        <div class="col-header col-header-ideas">
+          <span class="col-title">Ideas</span>
+          <span class="col-count"></span>
+        </div>
+        <button class="new-idea-btn" data-track="features">+ New idea</button>
+        <div class="col-body"></div>
+        <p class="col-empty">No ideas yet.</p>
+      </div>
+      <div class="col" id="col-features-issues">
+        <div class="col-header col-header-issues">
+          <span class="col-title">Issues</span>
+          <span class="col-count"></span>
+        </div>
+        <div class="col-body"></div>
+        <p class="col-empty">Assign issues from Inbox.</p>
+      </div>
+      <div class="col" id="col-features-prs">
+        <div class="col-header col-header-prs">
+          <span class="col-title">Pull Requests</span>
+          <span class="col-count"></span>
+        </div>
+        <div class="col-body"></div>
+        <p class="col-empty">Assign PRs from Inbox.</p>
+      </div>
+      <div class="col col-done" id="col-features-done">
+        <div class="col-header col-header-done">
+          <span class="col-title">Done</span>
+          <span class="col-count"></span>
+        </div>
+        <div class="col-body"></div>
+        <p class="col-empty">Completed items appear here.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Settings modal -->
+  <dialog id="settings-modal">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="icon-btn" id="close-settings">✕</button>
+      </div>
+      <div class="settings-body">
+        <div class="field">
+          <label for="cfg-token">GitHub Token</label>
+          <div class="input-row">
+            <input type="password" id="cfg-token" placeholder="ghp_…" autocomplete="off">
+            <button class="icon-btn" id="toggle-token" title="Show/hide token">👁</button>
+          </div>
+          <p class="field-hint">Needs <code>repo</code> (read) + <code>gist</code> scopes. Stored only in your browser — never sent to the Gist.</p>
+        </div>
+        <div class="field">
+          <label for="cfg-gist">Gist ID</label>
+          <div class="input-row">
+            <input type="text" id="cfg-gist" placeholder="e.g. a1b2c3d4e5f6…">
+            <button class="btn" id="create-gist-btn">Create new</button>
+          </div>
+          <p class="field-hint">Share this ID with teammates so everyone reads/writes the same board.</p>
+        </div>
+        <div class="share-hint" id="share-hint" style="display:none">
+          <strong>Share with teammates:</strong><br>
+          Send them the Gist ID above. They enter their own GitHub token + that ID in their Settings.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="cancel-settings">Cancel</button>
+        <button class="btn btn-primary" id="save-settings">Save</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Idea modal -->
+  <dialog id="idea-modal">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2 id="idea-modal-title">New Idea</h2>
+        <button class="icon-btn" id="close-idea-modal">✕</button>
+      </div>
+      <form id="idea-form">
+        <input type="hidden" id="idea-id">
+        <input type="hidden" id="idea-track">
+        <div class="field">
+          <label for="idea-title-input">Title <span class="required">*</span></label>
+          <input type="text" id="idea-title-input" placeholder="What are you thinking about?" required>
+        </div>
+        <div class="field">
+          <label for="idea-body-input">Description</label>
+          <textarea id="idea-body-input" rows="5" placeholder="Details, context, related links…"></textarea>
+        </div>
+        <div class="field">
+          <label for="idea-repo-input">Repo (optional)</label>
+          <select id="idea-repo-input">
+            <option value="">— Not repo-specific —</option>
+            <option value="silent-pay-wallet">silent-pay-wallet</option>
+            <option value="silent-pay">silent-pay</option>
+            <option value="shroud-indexer">shroud-indexer</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" id="cancel-idea">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save idea</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <div class="toasts" id="toasts"></div>
+  <div class="loading-veil" id="loading-veil" style="display:none">
+    <div class="spinner"></div>
+    <span id="loading-msg">Loading board…</span>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
