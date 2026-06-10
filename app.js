@@ -39,9 +39,10 @@ const cfg = {
 
 let state = {
   v: 1,
+  customTracks: [], // { id, name }[] — user-created tracks beyond the built-ins
   items:       [],  // GitHubItem[]
   ideas:       [],  // LocalIdea[]
-  assignments: {},  // itemId → { track: 'inbox'|'ui-revamp'|'features', done: bool }
+  assignments: {},  // itemId → { track: string, done: bool }
   lastSync:    null,
   lastUpdated: null,
 };
@@ -51,6 +52,7 @@ function loadStateFromStorage() {
     const raw = localStorage.getItem(LS_STATE);
     if (raw) state = { ...state, ...JSON.parse(raw) };
   } catch {}
+  if (!Array.isArray(state.customTracks)) state.customTracks = [];
 }
 
 function saveStateToStorage() {
@@ -88,8 +90,8 @@ async function loadFromGist() {
   const raw  = gist.files?.[GIST_FILENAME]?.content;
   if (!raw) throw new Error(`Gist exists but has no ${GIST_FILENAME} file.`);
   const parsed = JSON.parse(raw);
-  // Merge: preserve remote state but don't lose keys added in newer versions
   state = { ...state, ...parsed };
+  if (!Array.isArray(state.customTracks)) state.customTracks = [];
   return true;
 }
 
@@ -308,6 +310,131 @@ function deleteIdea(id) {
 }
 
 // ============================================================
+// DYNAMIC TRACKS
+// ============================================================
+
+function makeTrackBoardHTML(trackId) {
+  return `
+    <div class="col" id="col-${trackId}-ideas">
+      <div class="col-header col-header-ideas"><span class="col-title">Ideas</span><span class="col-count"></span></div>
+      <button class="new-idea-btn" data-track="${trackId}">+ New idea</button>
+      <div class="col-body"></div>
+      <p class="col-empty">No ideas yet.</p>
+    </div>
+    <div class="col" id="col-${trackId}-issues">
+      <div class="col-header col-header-issues"><span class="col-title">Issues</span><span class="col-count"></span></div>
+      <button class="new-gh-btn type-issue" data-type="issue" data-track="${trackId}">+ Add issue</button>
+      <div class="col-body"></div>
+      <p class="col-empty">Assign from Inbox or add manually.</p>
+    </div>
+    <div class="col" id="col-${trackId}-prs">
+      <div class="col-header col-header-prs"><span class="col-title">Pull Requests</span><span class="col-count"></span></div>
+      <button class="new-gh-btn type-pr" data-type="pr" data-track="${trackId}">+ Add PR</button>
+      <div class="col-body"></div>
+      <p class="col-empty">Assign from Inbox or add manually.</p>
+    </div>
+    <div class="col col-done" id="col-${trackId}-done">
+      <div class="col-header col-header-done"><span class="col-title">Done</span><span class="col-count"></span></div>
+      <button class="new-gh-btn type-done" data-type="done" data-track="${trackId}">+ Add done item</button>
+      <div class="col-body"></div>
+      <p class="col-empty">Completed items appear here.</p>
+    </div>
+  `;
+}
+
+// Sync the DOM to match state.customTracks — called on init and whenever tracks change.
+function buildCustomTracks() {
+  const nav    = document.getElementById('track-nav');
+  const boards = document.getElementById('boards-container');
+
+  // Remove stale custom track tabs and board sections
+  nav.querySelectorAll('.track-tab.custom-track').forEach(el => el.remove());
+  boards.querySelectorAll('.board.custom-track').forEach(el => el.remove());
+  document.getElementById('add-track-btn')?.remove();
+
+  for (const track of state.customTracks) {
+    // --- Tab ---
+    const btn = document.createElement('button');
+    btn.className = 'track-tab custom-track';
+    btn.dataset.tab = track.id;
+    btn.appendChild(document.createTextNode(track.name));
+
+    const badge = document.createElement('span');
+    badge.className = 'tab-badge';
+    badge.id = `badge-${track.id}`;
+    btn.appendChild(badge);
+
+    const closeSpan = document.createElement('span');
+    closeSpan.className = 'track-close';
+    closeSpan.dataset.trackId = track.id;
+    closeSpan.title = 'Remove track';
+    closeSpan.textContent = '×';
+    btn.appendChild(closeSpan);
+
+    nav.appendChild(btn);
+
+    // --- Board section ---
+    const section = document.createElement('section');
+    section.className = 'board custom-track';
+    section.id = `board-${track.id}`;
+    section.innerHTML = makeTrackBoardHTML(track.id);
+    boards.appendChild(section);
+  }
+
+  // "+" button always at the far right of the nav
+  const addBtn = document.createElement('button');
+  addBtn.className = 'track-tab track-add-btn';
+  addBtn.id = 'add-track-btn';
+  addBtn.title = 'Add new track';
+  addBtn.textContent = '+';
+  nav.appendChild(addBtn);
+}
+
+function addTrack(name) {
+  const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const id   = slug + '-' + Math.random().toString(36).slice(2, 6);
+  state.customTracks.push({ id, name: name.trim() });
+  scheduleSave();
+  buildCustomTracks();
+  renderBoard();
+  // Switch to the newly created tab
+  document.querySelector(`[data-tab="${id}"]`)?.click();
+}
+
+function confirmDeleteTrack(id) {
+  const track = state.customTracks.find(t => t.id === id);
+  if (!track) return;
+  const itemCount  = state.items.filter(i => getAssignment(i.id).track === id).length;
+  const ideaCount  = state.ideas.filter(i => i.track === id).length;
+  const total      = itemCount + ideaCount;
+  const detail     = total > 0
+    ? ` It has ${total} item(s) — issues/PRs will move back to Inbox, ideas will be deleted.`
+    : '';
+  if (!confirm(`Delete track "${track.name}"?${detail}`)) return;
+  deleteTrack(id);
+}
+
+function deleteTrack(id) {
+  // Move GitHub items back to Inbox
+  for (const item of state.items) {
+    if (getAssignment(item.id).track === id) {
+      state.assignments[item.id] = { track: 'inbox', done: false };
+    }
+  }
+  // Remove ideas belonging to this track
+  state.ideas = state.ideas.filter(i => i.track !== id);
+  // Remove the track
+  state.customTracks = state.customTracks.filter(t => t.id !== id);
+  scheduleSave();
+  buildCustomTracks();
+  // If we just deleted the active tab, fall back to inbox
+  if (!document.querySelector('.track-tab.active')) {
+    document.querySelector('[data-tab="inbox"]')?.click();
+  }
+  renderBoard();
+}
+
+// ============================================================
 // RENDERING
 // ============================================================
 
@@ -453,20 +580,20 @@ function updateCounts() {
 }
 
 function updateBadges() {
-  const counts = { inbox: 0, 'ui-revamp': 0, features: 0 };
+  const counts = {};
   for (const item of state.items) {
     const asgn = getAssignment(item.id);
     if (!asgn.done) counts[asgn.track] = (counts[asgn.track] || 0) + 1;
   }
-  counts['ui-revamp'] += state.ideas.filter(i => i.track === 'ui-revamp').length;
-  counts['features']  += state.ideas.filter(i => i.track === 'features').length;
-
-  for (const [track, count] of Object.entries(counts)) {
-    const el = document.getElementById(`badge-${track}`);
-    if (!el) continue;
+  for (const idea of state.ideas) {
+    if (!idea.done) counts[idea.track] = (counts[idea.track] || 0) + 1;
+  }
+  // Update every badge element that exists in the DOM (static + dynamic)
+  document.querySelectorAll('.tab-badge[id^="badge-"]').forEach(el => {
+    const count = counts[el.id.slice(6)] || 0; // strip "badge-" prefix
     el.textContent = count || '';
     el.style.display = count > 0 ? '' : 'none';
-  }
+  });
 }
 
 function updateSyncStatus() {
@@ -480,14 +607,28 @@ function updateSyncStatus() {
 // ============================================================
 
 function initTabs() {
-  document.querySelectorAll('.track-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.track-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const id = tab.dataset.tab;
-      document.querySelectorAll('.board').forEach(b => {
-        b.classList.toggle('show', b.id === `board-${id}`);
-      });
+  // Single delegated listener on the nav — covers static and dynamically added tabs
+  document.getElementById('track-nav').addEventListener('click', e => {
+    // "+" add-track button
+    if (e.target.closest('#add-track-btn')) {
+      openTrackModal();
+      return;
+    }
+    // "×" close button on custom tracks
+    const closeBtn = e.target.closest('.track-close');
+    if (closeBtn) {
+      e.stopPropagation();
+      confirmDeleteTrack(closeBtn.dataset.trackId);
+      return;
+    }
+    // Tab switch
+    const tab = e.target.closest('.track-tab');
+    if (!tab || tab.id === 'add-track-btn') return;
+    document.querySelectorAll('.track-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const id = tab.dataset.tab;
+    document.querySelectorAll('.board').forEach(b => {
+      b.classList.toggle('show', b.id === `board-${id}`);
     });
   });
 }
@@ -807,16 +948,43 @@ function initGHItemModal() {
 }
 
 // ============================================================
+// TRACK MODAL
+// ============================================================
+
+let trackModal;
+
+function openTrackModal() {
+  document.getElementById('track-name-input').value = '';
+  trackModal.showModal();
+  document.getElementById('track-name-input').focus();
+}
+
+function initTrackModal() {
+  trackModal = document.getElementById('track-modal');
+  document.getElementById('close-track-modal').addEventListener('click', () => trackModal.close());
+  document.getElementById('cancel-track').addEventListener('click', () => trackModal.close());
+  document.getElementById('track-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = document.getElementById('track-name-input').value.trim();
+    if (!name) return;
+    addTrack(name);
+    trackModal.close();
+  });
+}
+
+// ============================================================
 // INIT
 // ============================================================
 
 async function init() {
   loadStateFromStorage(); // restore cached state (ideas, assignments, items) synchronously
 
-  initTabs();
+  initTabs();         // event delegation — must run before any tabs exist
+  buildCustomTracks(); // append custom track tabs + boards from state
   initCardActions();
   initIdeaModal();
   initGHItemModal();
+  initTrackModal();
   initSettingsModal();
   initSyncButton();
   renderBoard(); // render from cache immediately — no flash of empty board
@@ -831,7 +999,8 @@ async function init() {
   if (!hasCache) showLoading('Loading board…');
   try {
     await loadFromGist();
-    saveStateToStorage(); // keep local cache in sync with remote
+    saveStateToStorage();
+    buildCustomTracks(); // remote state may have custom tracks not yet in DOM
     renderBoard();
   } catch (err) {
     showToast(err.message, 'error');

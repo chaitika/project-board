@@ -25,7 +25,7 @@
     </div>
   </header>
 
-  <nav class="track-nav">
+  <nav class="track-nav" id="track-nav">
     <button class="track-tab active" data-tab="inbox">
       Inbox
       <span class="tab-badge" id="badge-inbox"></span>
@@ -40,7 +40,7 @@
     </button>
   </nav>
 
-  <main class="boards">
+  <main class="boards" id="boards-container">
     <!-- Inbox: unassigned GitHub items -->
     <section class="board show" id="board-inbox">
       <div class="col" id="col-inbox-issues">
@@ -210,6 +210,26 @@
         <div class="modal-footer">
           <button type="button" class="btn" id="cancel-idea">Cancel</button>
           <button type="submit" class="btn btn-primary">Save idea</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- New track modal -->
+  <dialog id="track-modal">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2>New Track</h2>
+        <button class="icon-btn" id="close-track-modal">✕</button>
+      </div>
+      <form id="track-form">
+        <div class="field">
+          <label for="track-name-input">Track name <span class="required">*</span></label>
+          <input type="text" id="track-name-input" placeholder="e.g. Bug Fixes, Research, Backlog…" required maxlength="40">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" id="cancel-track">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create track</button>
         </div>
       </form>
     </div>

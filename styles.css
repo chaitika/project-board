@@ -227,6 +227,41 @@ body {
   color: var(--accent);
 }
 
+/* Add-track button */
+.track-add-btn {
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1;
+  padding: 0 12px;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.track-add-btn:hover { color: var(--accent); }
+
+/* Close badge on custom track tabs */
+.track-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-left: 3px;
+  line-height: 1;
+  vertical-align: middle;
+  transition: background 0.1s, color 0.1s;
+}
+.track-close:hover {
+  background: rgba(248,81,73,0.2);
+  color: var(--red);
+}
+
 /* ============================================================
    BOARDS
    ============================================================ */
