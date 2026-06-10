@@ -208,7 +208,11 @@ async function syncGitHub() {
     }
   }
 
-  state.items    = freshItems;
+  // Preserve manually-added items not found in the GitHub fetch
+  const freshIds = new Set(freshItems.map(i => i.id));
+  const manualItems = state.items.filter(i => i.isManual && !freshIds.has(i.id));
+
+  state.items    = [...freshItems, ...manualItems];
   state.lastSync = new Date().toISOString();
 }
 
@@ -241,6 +245,33 @@ function normalizePR(d, repo) {
     githubState,                    // 'open' | 'closed' | 'merged'
     updatedAt:   d.updated_at,
   };
+}
+
+// ============================================================
+// MANUAL GITHUB ITEMS
+// ============================================================
+
+async function fetchGHItemByUrl(url) {
+  const match = url.match(/github\.com\/([^/]+)\/([^/]+)\/(issues|pull(?:s)?)\/(\d+)/);
+  if (!match) throw new Error('Invalid GitHub URL. Expected: github.com/owner/repo/issues/N or …/pull/N');
+  const [, owner, repoName, pathType, numStr] = match;
+  const type       = pathType.startsWith('pull') ? 'pr' : 'issue';
+  const apiPath    = type === 'pr' ? 'pulls' : 'issues';
+  const resp = await fetch(`${GH_API}/repos/${owner}/${repoName}/${apiPath}/${numStr}`, { headers: ghHeaders(true) });
+  if (!resp.ok) throw new Error(`GitHub error ${resp.status} — check the URL and your token.`);
+  const data = await resp.json();
+  const repo = { owner, name: repoName };
+  return type === 'pr' ? normalizePR(data, repo) : normalizeIssue(data, repo);
+}
+
+function addManualGHItem(item, track, done = false) {
+  item = { ...item, isManual: true };
+  const idx = state.items.findIndex(i => i.id === item.id);
+  if (idx >= 0) state.items[idx] = item;
+  else          state.items.push(item);
+  state.assignments[item.id] = { track, done };
+  scheduleSave();
+  renderBoard();
 }
 
 // ============================================================
@@ -318,9 +349,10 @@ function renderBoard() {
     col?.querySelector('.col-body')?.appendChild(makeGHCard(item, asgn));
   }
 
-  // Place each idea in the right column
+  // Place each idea in the right column (done ideas go to the Done column)
   for (const idea of state.ideas) {
-    const col = document.getElementById(`col-${idea.track}-ideas`);
+    const colId = idea.done ? `col-${idea.track}-done` : `col-${idea.track}-ideas`;
+    const col = document.getElementById(colId);
     col?.querySelector('.col-body')?.appendChild(makeIdeaCard(idea));
   }
 
@@ -362,7 +394,7 @@ function makeGHCard(item, asgn) {
   div.innerHTML = `
     <div class="card-tags">
       <span class="repo-tag ${repoCls}">${escHtml(item.repoName)}</span>
-      <span class="type-tag type-${item.type}">${typeLabel} #${item.number}</span>
+      <span class="type-tag type-${item.type}">${typeLabel}${item.number ? ` #${item.number}` : ''}</span>
       ${stateTag}
     </div>
     <div class="card-title">${escHtml(item.title)}</div>
@@ -384,6 +416,10 @@ function makeIdeaCard(idea) {
   const repoCls = REPO_CSS[idea.repo] || '';
   const preview = idea.body ? idea.body.slice(0, 120) + (idea.body.length > 120 ? '…' : '') : '';
 
+  const doneBtn = idea.done
+    ? `<button class="act-btn" data-action="undone-idea" data-id="${idea.id}">↩ Reopen</button>`
+    : `<button class="act-btn act-done" data-action="done-idea" data-id="${idea.id}">✓ Done</button>`;
+
   div.innerHTML = `
     <div class="card-tags">
       ${idea.repo ? `<span class="repo-tag ${repoCls}">${escHtml(idea.repo)}</span>` : ''}
@@ -398,6 +434,7 @@ function makeIdeaCard(idea) {
         <button class="act-btn act-danger" data-action="delete-idea" data-id="${idea.id}">✕</button>
       </div>
     </div>
+    <div class="card-actions">${doneBtn}</div>
   `;
   return div;
 }
@@ -464,6 +501,9 @@ function initCardActions() {
     const newIdeaBtn = e.target.closest('.new-idea-btn');
     if (newIdeaBtn) { openIdeaModal(newIdeaBtn.dataset.track); return; }
 
+    const newGHBtn = e.target.closest('.new-gh-btn');
+    if (newGHBtn) { openGHItemModal(newGHBtn.dataset.type, newGHBtn.dataset.track); return; }
+
     const actBtn = e.target.closest('[data-action]');
     if (!actBtn) return;
     const { action, id, track } = actBtn.dataset;
@@ -480,6 +520,12 @@ function initCardActions() {
         break;
       case 'undone':
         setAssignment(id, { done: false });
+        break;
+      case 'done-idea':
+        updateIdea(id, { done: true });
+        break;
+      case 'undone-idea':
+        updateIdea(id, { done: false });
         break;
       case 'edit-idea': {
         const idea = state.ideas.find(i => i.id === id);
@@ -658,6 +704,109 @@ function hideLoading() {
 }
 
 // ============================================================
+// GITHUB ITEM MODAL
+// ============================================================
+
+let ghItemModal;
+let ghFetchedItem = null;
+
+function openGHItemModal(type, track) {
+  const isDone = type === 'done';
+  document.getElementById('gh-item-type').value  = isDone ? 'issue' : type; // 'done' type defaults to issue
+  document.getElementById('gh-item-track').value = track;
+  document.getElementById('gh-item-done').value  = isDone ? '1' : '';
+  document.getElementById('gh-modal-title').textContent =
+    isDone ? 'Add Done Item' : type === 'pr' ? 'Add Pull Request' : 'Add Issue';
+  document.getElementById('gh-item-url').value   = '';
+  document.getElementById('gh-item-title').value = '';
+  const hint = document.getElementById('gh-fetch-hint');
+  hint.textContent = 'Paste the URL and click Fetch to auto-fill, or enter the title manually.';
+  hint.className   = 'field-hint';
+  ghFetchedItem    = null;
+  ghItemModal.showModal();
+  document.getElementById('gh-item-url').focus();
+}
+
+function initGHItemModal() {
+  ghItemModal = document.getElementById('gh-item-modal');
+  document.getElementById('close-gh-modal').addEventListener('click',  () => ghItemModal.close());
+  document.getElementById('cancel-gh-item').addEventListener('click', () => ghItemModal.close());
+
+  document.getElementById('fetch-gh-btn').addEventListener('click', async () => {
+    const url     = document.getElementById('gh-item-url').value.trim();
+    const hint    = document.getElementById('gh-fetch-hint');
+    const fetchBtn = document.getElementById('fetch-gh-btn');
+    fetchBtn.disabled    = true;
+    fetchBtn.textContent = 'Fetching…';
+    hint.textContent     = '';
+    hint.className       = 'field-hint';
+    try {
+      ghFetchedItem = await fetchGHItemByUrl(url);
+      document.getElementById('gh-item-title').value = ghFetchedItem.title;
+      // Override type to match what was actually fetched
+      document.getElementById('gh-item-type').value = ghFetchedItem.type;
+      hint.textContent = `✓ Found: ${ghFetchedItem.repoName} #${ghFetchedItem.number} (${ghFetchedItem.githubState})`;
+      hint.className   = 'field-hint gh-fetch-ok';
+    } catch (err) {
+      hint.textContent = `✕ ${err.message}`;
+      hint.className   = 'field-hint gh-fetch-err';
+    } finally {
+      fetchBtn.disabled    = false;
+      fetchBtn.textContent = 'Fetch';
+    }
+  });
+
+  document.getElementById('gh-item-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const type  = document.getElementById('gh-item-type').value;
+    const track = document.getElementById('gh-item-track').value;
+    const done  = !!document.getElementById('gh-item-done').value;
+    const title = document.getElementById('gh-item-title').value.trim();
+    if (!title) return;
+
+    let item = ghFetchedItem;
+    if (!item) {
+      // No fetch → build a minimal item from the URL (or just a title-only placeholder)
+      const url   = document.getElementById('gh-item-url').value.trim();
+      const match = url.match(/github\.com\/([^/]+)\/([^/]+)\/(issues|pull(?:s)?)\/(\d+)/);
+      if (match) {
+        const [, owner, repoName, , numStr] = match;
+        item = {
+          id:          `${owner}/${repoName}#${numStr}`,
+          type,
+          repoName,
+          number:      parseInt(numStr),
+          title,
+          url,
+          labels:      [],
+          author:      '?',
+          githubState: 'open',
+          updatedAt:   new Date().toISOString(),
+        };
+      } else {
+        // No URL → create a freeform placeholder (useful for "done" items)
+        const slug = `manual-${Date.now()}`;
+        item = {
+          id:          slug,
+          type,
+          repoName:    '',
+          number:      null,
+          title,
+          url:         '',
+          labels:      [],
+          author:      '?',
+          githubState: done ? 'closed' : 'open',
+          updatedAt:   new Date().toISOString(),
+        };
+      }
+    }
+
+    addManualGHItem(item, track, done);
+    ghItemModal.close();
+  });
+}
+
+// ============================================================
 // INIT
 // ============================================================
 
@@ -667,6 +816,7 @@ async function init() {
   initTabs();
   initCardActions();
   initIdeaModal();
+  initGHItemModal();
   initSettingsModal();
   initSyncButton();
   renderBoard(); // render from cache immediately — no flash of empty board

@@ -48,14 +48,16 @@
           <span class="col-title">Issues</span>
           <span class="col-count"></span>
         </div>
+        <button class="new-gh-btn type-issue" data-type="issue" data-track="inbox">+ Add issue</button>
         <div class="col-body"></div>
-        <p class="col-empty">No unassigned issues. Click <strong>↻ Sync</strong> to fetch from GitHub.</p>
+        <p class="col-empty">No unassigned issues. Click <strong>↻ Sync</strong> or add one manually.</p>
       </div>
       <div class="col" id="col-inbox-prs">
         <div class="col-header col-header-prs">
           <span class="col-title">Pull Requests</span>
           <span class="col-count"></span>
         </div>
+        <button class="new-gh-btn type-pr" data-type="pr" data-track="inbox">+ Add PR</button>
         <div class="col-body"></div>
         <p class="col-empty">No unassigned pull requests.</p>
       </div>
@@ -77,22 +79,25 @@
           <span class="col-title">Issues</span>
           <span class="col-count"></span>
         </div>
+        <button class="new-gh-btn type-issue" data-type="issue" data-track="ui-revamp">+ Add issue</button>
         <div class="col-body"></div>
-        <p class="col-empty">Assign issues from Inbox.</p>
+        <p class="col-empty">Assign from Inbox or add manually.</p>
       </div>
       <div class="col" id="col-ui-revamp-prs">
         <div class="col-header col-header-prs">
           <span class="col-title">Pull Requests</span>
           <span class="col-count"></span>
         </div>
+        <button class="new-gh-btn type-pr" data-type="pr" data-track="ui-revamp">+ Add PR</button>
         <div class="col-body"></div>
-        <p class="col-empty">Assign PRs from Inbox.</p>
+        <p class="col-empty">Assign from Inbox or add manually.</p>
       </div>
       <div class="col col-done" id="col-ui-revamp-done">
         <div class="col-header col-header-done">
           <span class="col-title">Done</span>
           <span class="col-count"></span>
         </div>
+        <button class="new-gh-btn type-done" data-type="done" data-track="ui-revamp">+ Add done item</button>
         <div class="col-body"></div>
         <p class="col-empty">Completed items appear here.</p>
       </div>
@@ -114,22 +119,25 @@
           <span class="col-title">Issues</span>
           <span class="col-count"></span>
         </div>
+        <button class="new-gh-btn type-issue" data-type="issue" data-track="features">+ Add issue</button>
         <div class="col-body"></div>
-        <p class="col-empty">Assign issues from Inbox.</p>
+        <p class="col-empty">Assign from Inbox or add manually.</p>
       </div>
       <div class="col" id="col-features-prs">
         <div class="col-header col-header-prs">
           <span class="col-title">Pull Requests</span>
           <span class="col-count"></span>
         </div>
+        <button class="new-gh-btn type-pr" data-type="pr" data-track="features">+ Add PR</button>
         <div class="col-body"></div>
-        <p class="col-empty">Assign PRs from Inbox.</p>
+        <p class="col-empty">Assign from Inbox or add manually.</p>
       </div>
       <div class="col col-done" id="col-features-done">
         <div class="col-header col-header-done">
           <span class="col-title">Done</span>
           <span class="col-count"></span>
         </div>
+        <button class="new-gh-btn type-done" data-type="done" data-track="features">+ Add done item</button>
         <div class="col-body"></div>
         <p class="col-empty">Completed items appear here.</p>
       </div>
@@ -202,6 +210,37 @@
         <div class="modal-footer">
           <button type="button" class="btn" id="cancel-idea">Cancel</button>
           <button type="submit" class="btn btn-primary">Save idea</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- GitHub item modal -->
+  <dialog id="gh-item-modal">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2 id="gh-modal-title">Add Issue</h2>
+        <button class="icon-btn" id="close-gh-modal">✕</button>
+      </div>
+      <form id="gh-item-form">
+        <input type="hidden" id="gh-item-type">
+        <input type="hidden" id="gh-item-track">
+        <input type="hidden" id="gh-item-done">
+        <div class="field">
+          <label for="gh-item-url">GitHub URL</label>
+          <div class="input-row">
+            <input type="text" id="gh-item-url" placeholder="https://github.com/owner/repo/issues/42">
+            <button type="button" class="btn" id="fetch-gh-btn">Fetch</button>
+          </div>
+          <p class="field-hint" id="gh-fetch-hint">Paste the URL and click Fetch to auto-fill the title, or fill in manually.</p>
+        </div>
+        <div class="field">
+          <label for="gh-item-title">Title <span class="required">*</span></label>
+          <input type="text" id="gh-item-title" placeholder="Auto-filled after Fetch, or enter manually" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" id="cancel-gh-item">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="gh-submit-btn">Add</button>
         </div>
       </form>
     </div>
